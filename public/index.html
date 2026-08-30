@@ -1,1 +1,123 @@
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Location Link Generator</title><style>body{font-family:system-ui;margin:0;background:#f5f7fb;color:#182033}.wrap{max-width:620px;margin:8vh auto;padding:24px}.card{background:#fff;padding:28px;border-radius:18px;box-shadow:0 10px 30px #0001}input,button{width:100%;box-sizing:border-box;padding:14px;border-radius:10px;border:1px solid #ccd2dd;font-size:16px;margin:7px 0}button{background:#111827;color:#fff;border:0;cursor:pointer}.result{display:none;margin-top:20px;padding:15px;background:#eef7ee;border-radius:10px;word-break:break-all}small{color:#667085}</style></head><body><div class="wrap"><div class="card"><h1>Create a location link</h1><p>Generate a consent-based link for a meeting guest. They must tap <b>Allow</b> when their browser asks for location access.</p><label>Label</label><input id="label" value="Meeting location"><label>Link expires after (hours)</label><input id="hours" type="number" min="1" max="168" value="24"><label>Admin key</label><input id="key" type="password" placeholder="Your ADMIN_KEY"><button onclick="create()">Generate link</button><div id="out" class="result"></div><small>Keep your admin key private. This page is intended for your own server.</small></div></div><script>async function create(){const key=document.getElementById('key').value;const r=await fetch('/api/share',{method:'POST',headers:{'Content-Type':'application/json','x-admin-key':key},body:JSON.stringify({label:document.getElementById('label').value,hours:document.getElementById('hours').value})});const j=await r.json();if(!r.ok)return alert(j.error||'Could not create link');const url=location.origin+j.url;out.style.display='block';out.innerHTML='<b>Send this link:</b><br><br><a href="'+url+'">'+url+'</a><br><br><button onclick="navigator.clipboard.writeText(\''+url+'\');this.textContent=\'Copied\'">Copy link</button>'}</script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Location Link Generator & Viewer</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f5f7fb; color: #182033; }
+    .wrap { max-width: 620px; margin: 5vh auto; padding: 20px; }
+    .card { background: #fff; padding: 24px; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); margin-bottom: 20px; }
+    input, select, button { width: 100%; box-sizing: border-box; padding: 12px; border-radius: 8px; border: 1px solid #ccd2dd; font-size: 15px; margin: 6px 0 14px; }
+    button { background: #111827; color: #fff; border: 0; cursor: pointer; font-weight: 600; margin-top: 6px; }
+    button:hover { background: #1f2937; }
+    .btn-secondary { background: #4b5563; }
+    .btn-secondary:hover { background: #374151; }
+    .result { display: none; margin-top: 15px; padding: 14px; background: #eef7ee; border-radius: 8px; word-break: break-all; }
+    .item-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-top: 10px; }
+    .badge { display: inline-block; padding: 3px 8px; font-size: 12px; font-weight: 600; border-radius: 4px; }
+    .badge-ok { background: #dcfce7; color: #166534; }
+    .badge-wait { background: #fef9c3; color: #854d0e; }
+    a.map-link { display: inline-block; margin-top: 6px; font-weight: 600; color: #2563eb; text-decoration: none; }
+    a.map-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    
+    <!-- 1. CREATE LINK BOX -->
+    <div class="card">
+      <h2 style="margin-top:0;">1. Create a Location Link</h2>
+      <label>Meeting Label / Person Name</label>
+      <input id="label" value="Meeting location">
+      
+      <label>Link expires after (hours)</label>
+      <input id="hours" type="number" min="1" max="168" value="24">
+      
+      <label>Admin Key</label>
+      <input id="key" type="password" placeholder="Enter your ADMIN_KEY">
+      
+      <button onclick="create()">Generate Link</button>
+      <div id="out" class="result"></div>
+    </div>
+
+    <!-- 2. VIEW LOCATIONS BOX -->
+    <div class="card">
+      <h2 style="margin-top:0;">2. View Received Locations</h2>
+      <label>Admin Key</label>
+      <input id="viewKey" type="password" placeholder="Enter your ADMIN_KEY">
+      
+      <button class="btn-secondary" onclick="viewLocations()">Refresh / Load Locations</button>
+      
+      <div id="locationsList" style="margin-top: 15px;"></div>
+    </div>
+
+  </div>
+
+  <script>
+    async function create() {
+      const key = document.getElementById('key').value;
+      const label = document.getElementById('label').value;
+      const hours = document.getElementById('hours').value;
+      const out = document.getElementById('out');
+
+      try {
+        const r = await fetch('/api/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+          body: JSON.stringify({ label, hours })
+        });
+        const j = await r.json();
+        if (!r.ok) return alert(j.error || 'Could not create link');
+        
+        const url = location.origin + j.url;
+        out.style.display = 'block';
+        out.innerHTML = '<b>Send this link:</b><br><br><a href="' + url + '" target="_blank">' + url + '</a><br><br><button onclick="navigator.clipboard.writeText(\'' + url + '\');this.textContent=\'Copied\'">Copy Link</button>';
+      } catch (err) {
+        alert('Failed to connect to server.');
+      }
+    }
+
+    async function viewLocations() {
+      const key = document.getElementById('viewKey').value;
+      const list = document.getElementById('locationsList');
+      list.innerHTML = '<p>Loading...</p>';
+
+      try {
+        const r = await fetch('/api/admin/shares', {
+          headers: { 'x-admin-key': key }
+        });
+        const j = await r.json();
+        if (!r.ok) {
+          list.innerHTML = '<p style="color:red;">' + (j.error || 'Failed to load') + '</p>';
+          return;
+        }
+
+        if (!j || j.length === 0) {
+          list.innerHTML = '<p>No links created yet.</p>';
+          return;
+        }
+
+        list.innerHTML = j.map(item => {
+          const hasLocation = item.lat && item.lng;
+          const statusBadge = hasLocation 
+            ? '<span class="badge badge-ok">Location Received</span>' 
+            : '<span class="badge badge-wait">Waiting for user</span>';
+          
+          const mapButton = hasLocation 
+            ? '<br><a class="map-link" target="_blank" href="https://www.google.com/maps?q=' + item.lat + ',' + item.lng + '">📍 Open in Google Maps</a>' 
+            : '';
+
+          return '<div class="item-box">' +
+            '<div><strong>' + (item.label || 'Meeting') + '</strong> ' + statusBadge + '</div>' +
+            '<div style="font-size: 13px; color: #6b7280; margin-top: 4px;">Created: ' + new Date(item.created_at).toLocaleString() + '</div>' +
+            mapButton +
+          '</div>';
+        }).join('');
+
+      } catch (err) {
+        list.innerHTML = '<p style="color:red;">Network error fetching locations.</p>';
+      }
+    }
+  </script>
+</body>
+</html>
